@@ -60,26 +60,67 @@ Implement the trading algorithm as per the instructions. You should initialize n
 
 
 ```r
-# Initialize columns for trade type, cost/proceeds, and accumulated shares in amd_df
-amd_df$trade_type <- NA
-amd_df$costs_proceeds <- NA  # Corrected column name
-amd_df$accumulated_shares <- 0  # Initialize if needed for tracking
-
-# Initialize variables for trading logic
+amd_df$trade_type <- NA #initialise columns in the data frame.
+amd_df$costs_proceeds <- NA 
+amd_df$accumulated_shares <- 0 #set initial value for different parameters.
+amd_df$profit<-NA
 previous_price <- 0
 share_size <- 100
-accumulated_shares <- 0
-
-for (i in 1:nrow(amd_df)) {
-# Fill your code here
+current_price <- amd_df$close[1]
+options(scipen = 1000, digits = 6) #limit the digits shown to 6 when dealing with large 
+decimals.
+ 
+ if(previous_price==0){ #Set initial values for day 1.
+ amd_df$trade_type[1] <- "Buy"
+ amd_df$costs_proceeds[1]<- amd_df$close[1]*share_size
+ amd_df$accumulated_shares[1] <- share_size
+ amd_df$profit[1]<--amd_df$costs_proceeds[1]
+ }
+ 
+ 
+for (i in 2:nrow(amd_df)) {
+ current_price <- amd_df$close[i]
+ #reset current price with the new closing price of the day i from 2.
+ if (current_price < previous_price) {
+ amd_df$trade_type[i] <- "Buy" 
+ amd_df$costs_proceeds[i]<- current_price*share_size
+ amd_df$accumulated_shares[i] <- amd_df$accumulated_shares[i-1] + share_size
+ amd_df$profit[i]<-amd_df$profit[i-1]-amd_df$costs_proceeds[i]
+ }
+ #If previous price is greater than current price then we buy 100 shares at the current
+price, add 100 to accumulated shares and carry on profit count from previous row as no
+thing is sold.
+ else if(current_price>=previous_price){
+ amd_df$accumulated_shares[i]<-amd_df$accumulated_shares[i-1]
+ amd_df$profit[i]<-amd_df$profit[i-1]
+ }
+ #If share price for AMD goes up on a particular day, we hold onto the shares, copies t
+he accumulated shares and profit from the previous row.
+ if(i==nrow(amd_df)){
+ amd_df$trade_type[i] <- "Sell"
+ amd_df$profit[i]<-amd_df$profit[i-1]+amd_df$accumulated_shares[i]*current_price
+ } #If at the end of the data frame (last day) then sell all shares at current pric
+e and calculate total profit from the sell transaction.
+ previous_price<-current_price #Replace previous price with current price.
 }
+
 ```
 
 
 ### Step 3: Customize Trading Period
 - Define a trading period you wanted in the past five years 
 ```r
-# Fill your code here
+start_date <- as.Date("2019-05-20")
+end_date <- as.Date("2020-05-20") #Set define starting date and ending date.
+amd_df <- amd_df[amd_df$date >= start_date & amd_df$date <= end_date, ]
+#replace the dataframe with values only between the start and end dates.
+for (i in 1:nrow(amd_df)) {
+ current_price <- amd_df$close[i]
+ if (i == nrow(amd_df)) {
+ amd_df$trade_type[i] <- 'Sell'
+ amd_df$profit[i]<-amd_df$profit[i-1]+amd_df$accumulated_shares[i]*current_price
+ } #Generates new sell day for the new end date.
+}
 ```
 
 
@@ -91,7 +132,10 @@ After running your algorithm, check if the trades were executed as expected. Cal
 - ROI Formula: $$\text{ROI} = \left( \frac{\text{Total Profit or Loss}}{\text{Total Capital Invested}} \right) \times 100$$
 
 ```r
-# Fill your code here
+Total_Profit<-tail(amd_df$profit,n=1) #extracts the last value from the profit 
+column, which is our total profit
+Total_Capital_Invested<-sum(amd_df$costs_proceeds, na.rm = TRUE)
+ROI<-(Total_Profit/Total_Capital_Invested)*100 #finds capital invested by summing up all costs, and calculating ROI based on the formula
 ```
 
 ### Step 5: Profit-Taking Strategy or Stop-Loss Mechanisum (Choose 1)
@@ -100,7 +144,92 @@ After running your algorithm, check if the trades were executed as expected. Cal
 
 
 ```r
-# Fill your code here
+amd_df$trade_type <- NA
+amd_df$costs_proceeds <- NA 
+amd_df$accumulated_shares <- 0 
+previous_price <- 0
+share_size <- 100
+amd_df$total_cost<- NA
+amd_df$average_purchase_price<-NA
+amd_df$profit_threshold<- NA
+amd_df$return_on_shares_sold<-NA
+amd_df$total_profit<-NA #initiates 5 new variables to determine when to 
+sell to take profit
+options(scipen = 1000, digits = 6)
+profit_margin<-1.2 #customisable profit margin
+ current_price <- amd_df$close[1]
+ if(previous_price==0){
+ amd_df$trade_type[1] <- "Buy"
+ amd_df$costs_proceeds[1]<- amd_df$close[1]*share_size
+ amd_df$accumulated_shares[1] <- share_size
+ amd_df$total_cost[1]<-amd_df$costs_proceeds[1]
+ amd_df$average_purchase_price[1]<-amd_df$close[1]
+ amd_df$profit_threshold[1]<-profit_margin*amd_df$average_purchase_price[1]
+ amd_df$total_profit[1]<--amd_df$total_cost[1]
+ amd_df$return_on_shares_sold[1]<-0
+ }
+ #initialising all values for day 1
+ 
+for (i in 2:nrow(amd_df)) {
+ current_price <- amd_df$close[i]
+ 
+ if (current_price < previous_price) {
+ amd_df$trade_type[i] <- "Buy"
+ amd_df$costs_proceeds[i]<- current_price*share_size
+ amd_df$accumulated_shares[i] <- amd_df$accumulated_shares[i-1] + share_size
+ amd_df$total_cost[i]<-amd_df$total_cost[i-1]+amd_df$costs_proceeds[i]
+ #when buys something on any particular day, the total cost gets accumulated
+ amd_df$total_profit[i]<-amd_df$total_profit[i-1]-amd_df$costs_proceeds[i]
+ amd_df$return_on_shares_sold[i]<-0
+ }#for the particular day which there was a purchase, total profit from before redu
+ces by the amount spend, and since no shares are sold return on shares sold would be
+0
+ 
+ else if(current_price>=previous_price){#If there was a price increase
+ amd_df$accumulated_shares[i]<-amd_df$accumulated_shares[i-1]#dont buy nor sell
+ amd_df$total_cost[i]<-amd_df$total_cost[i-1] 
+ amd_df$total_profit[i]<-amd_df$total_profit[i-1]
+ #accumulate total cost and profit
+ amd_df$return_on_shares_sold[i]<-0 #no shares were sold hence 0
+ }
+ 
+ if(i==nrow(amd_df)){
+ amd_df$trade_type[i] <- "Sell"
+ amd_df$return_on_shares_sold[i]<-amd_df$accumulated_shares[i-1]*current_price
+ amd_df$total_profit[i]<-amd_df$total_profit[i-1]+amd_df$accumulated_shares[i-1]*current_p
+rice
+ #sells at the end of the trading period and calculates return on transaction and
+profit
+ }
+ amd_df$average_purchase_price[i]<-amd_df$total_cost[i]/amd_df$accumulated_shares[i]#define
+average purchase price as the total cost divided by total
+shares
+ amd_df$profit_threshold<-amd_df$average_purchase_price*profit_margin
+ #define profit threshold as a percentage increase from average purchase price
+ if(amd_df$close[i]>amd_df$profit_threshold[i]){
+ #return true and processes the if function only if closing price for the day is great
+er than profit threshold for the day
+ 
+ amd_df$trade_type[i]<-'Sell Half'
+ amd_df$accumulated_shares[i]<-amd_df$accumulated_shares[i-1]/2
+ amd_df$total_cost[i]<-amd_df$total_cost[i-1]/2
+ #sells half the shares, hence halfing the accumulated shares and total cost for the d
+ay
+ amd_df$total_profit[i]<-amd_df$total_profit[i-1]+amd_df$accumulated_shares[i-1]/2*current
+_price #calculats new total profit by adding value of shares sold to pr
+evious days total profit
+ amd_df$return_on_shares_sold[i]<-amd_df$accumulated_shares[i-1]/2*current_price
+ } #calculate returns on the selling transaction
+ previous_price<-current_price #replace previous price with current price to continue the fo
+r loop
+} 
+ Total_Profit<-sum(amd_df$return_on_shares_sold,na.rm = TRUE)-sum(amd_df$costs_proceeds, na.
+rm = TRUE)
+ Total_Capital_Invested<-sum(amd_df$costs_proceeds, na.rm = TRUE)
+ ROI<-(Total_Profit/Total_Capital_Invested)*100
+ #when at the end of the data frame after all selling is completed new total profit
+and ROI is calculated.
+
 ```
 
 
@@ -110,7 +239,21 @@ After running your algorithm, check if the trades were executed as expected. Cal
 
 
 ```r
-# Fill your code here and Disucss
+It was observed that:
+Strategy one returned a Profit of $196930 with a ROI of 45.9%
+Strategy two returned a Profit of $86782 with a ROI of 20.2%
+We can clearly see that by implementing a profit taking strategy, we decreased our profit by more than half.
+This is because of the continuous positive news about AMDs innovation.
+This can be summarised into two major reasons:
+The release of Radeon RX 5000 series GPUs and zen 2 series CPUs on July 7th 2019, where AMD was
+able to take back parts of the market from its competitors Nvidia and Intel respectively through their
+products general lower price for equivalent performance compared to the counterpart products.
+The beginning of lock downs across various countries around the world due to the Covid-19 Pandemic,
+which caused there to be an increase in demand for digital entertainment, hence driving the semiconductor market up.
+Since both reasons caused a consistent rise in AMD shares, it increased investors belief in the potential of
+chip-making industry and AMD, therefore by selling stocks for a cheaper price throughout the year to reduce
+risk, we are effectively selling less shares at the end of the trading period where the stock price is at peak, and
+hence making $110148 less, which therefore providing a lower ROI.
 ```
 
 Sample Discussion: On Wednesday, December 6, 2023, AMD CEO Lisa Su discussed a new graphics processor designed for AI servers, with Microsoft and Meta as committed users. The rise in AMD shares on the following Thursday suggests that investors believe in the chipmaker's upward potential and market expectations; My first strategy earned X dollars more than second strategy on this day, therefore providing a better ROI.
